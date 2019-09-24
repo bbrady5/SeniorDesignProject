@@ -2,8 +2,8 @@
 
 import socket
 
-host='127.0.0.1'
-port=5000
+host='10.137.24.133'
+port=5001
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -11,8 +11,35 @@ s.bind((host, port))
 
 s.listen(1)
 
-sock, address = s.accept()
-print("connection")
+
+
+i=1
+m=0
+while m<3:
+        
+    sock, address = s.accept()
+    print("connection")
+
+    filepicname= "totally_uni" + str(i) + ".jpg"
+    
+    f = open(filepicname, "wb") # renamed file
+    
+    while True:
+    
+        veri = sock.recv(512)
+        if not veri:
+            break
+        f.write(veri)
+    f.close()
+    print("picture received.")
+    i+=1
+    m+=1
+
+sock.close()
+
+s.close()
+
+
 
 def recvall(baglanti, buf):
 
@@ -25,16 +52,3 @@ def recvall(baglanti, buf):
         data += packet
     return data
 
-f = open("pic_here.png", "w") # renamed file
-
-while True:
-
-    veri = sock.recv(512)
-    if not veri:
-        break
-    f.write(veri)
-f.close()
-print("picture received.")
-sock.close()
-
-s.close()
