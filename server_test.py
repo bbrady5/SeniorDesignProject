@@ -45,7 +45,7 @@ s = usocket.socket(usocket.AF_INET, usocket.SOCK_STREAM)
 print("about to bind")
 s.bind((HOST, PORT))
 print("about to listen")
-s.listen(0)
+s.listen(5)
 print("listened")
 # receive text file
 conn, address = s.accept()
@@ -86,19 +86,22 @@ uos.chdir("/Rec_faces")
 
 while m<n:
     print("entered while loop")
-    s = usocket.socket(usocket.AF_INET, usocket.SOCK_STREAM)
-    print("about to bind")
-    PORT +=1
-    print(PORT)
-    s.bind((HOST, PORT))
-    print("about to listen")
-    s.listen(0)
-    print("listened")
+    try:
+        s = usocket.socket(usocket.AF_INET, usocket.SOCK_STREAM)
+        print("about to bind")
+        PORT +=1
+        print(PORT)
+        s.bind((HOST, PORT))
+        print("about to listen")
+        s.listen(5)
+        print("listened")
 
-    conn, address = s.accept()
-    print(conn)
-    print(address)
-    print("connection")
+        conn, address = s.accept()
+        print(conn)
+        print(address)
+        print("connection")
+    except Exception as e:
+        print(e)
     filepicname= lines[m] #how does it know its a string?
     print(filepicname)
     f = open(filepicname, "wb") # renamed file
@@ -124,3 +127,4 @@ while m<n:
     #print("connection closed")
     s.close()
     print("socket closed")
+    time.sleep(100)

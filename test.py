@@ -11,6 +11,7 @@ import threading
 import os
 import shutil
 import socket
+import time
 #from nntplib import first
 
 url = "https://api.meraki.com/api/v0/devices/Q2PD-6WK9-V4XS/clients"
@@ -102,7 +103,7 @@ def capture():
             print ("The lists are identical..no need to refresh camera") 
         else : 
             print ("The lists are not identical..refreshing camera with new photos")
-            host='10.137.76.191'
+            host='10.132.78.207'
             server_send(host)
             #removing all images from image to send
             directory = "c:\\Faces\\Images_to_send"
@@ -122,7 +123,7 @@ def capture():
     
 
 def timed_prog():
-    threading.Timer(30.0, timed_prog).start() # called every 15 seconds
+    threading.Timer(60.0, timed_prog).start() # called every 15 seconds
     capture()
     print("----------------------")
     
@@ -183,6 +184,7 @@ def server_send(host_ip):
                     print("512 bytes sent")
                 f.close()
                 s.close()
+                time.sleep(.1)
                 print("picture sent")
                 print("Success")
                 print("here3")
