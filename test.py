@@ -12,7 +12,7 @@ import os
 import shutil
 import socket
 import time
-#from nntplib import first
+
 
 url = "https://api.meraki.com/api/v0/devices/Q2PD-6WK9-V4XS/clients"
 
@@ -37,7 +37,6 @@ current_list = []
 def capture():
     global previous_list
     global current_list
-    #global host
     response = requests.request("GET", url, headers=headers, params=querystring)
     print("Current Date and Time of Run:")
     print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
@@ -45,15 +44,15 @@ def capture():
     print(response.text)
     
     json_data = json.loads(response.text)
-    if len(json_data) != 0:
+    if len(json_data) != 0: # if the JSON is not empty
+        #open a text file to write the names of people connected to AP
         first_file_path = "C:\\Faces\\Images_to_send\\face_txt.txt"
         first_file = open(first_file_path, "w")
-        #empty the file of its contents
+        #empty the file of any previous contents
         first_file.seek(0)
         first_file.truncate()
-        #count = 0
         print("Client Names found:")
-        for item in json_data:
+        for item in json_data: #isolating name from other device info
             desc = item.get("description")
             directory = "c:\\Faces\\" + desc
             #print(directory)
@@ -64,24 +63,20 @@ def capture():
             else:
                 print(desc)
                 current_list.append(desc)
-                
+                # moving selected images to a different folder to be sent to camera
                 try:
                     for filename in sorted(os.listdir(directory)):
-                        if filename.endswith(".jpg"):
-                            #print("about to copy to images_to_send..") 
-                            pathname = "c:\\Faces\\" + desc + "\\" + filename
-                            shutil.copy(pathname, "c:\\Faces\\Images_to_send")
-                            #print("copy SUCCESS")
+                        if filename.endswith(".pgm"):
+                            pathname = "C:\\Faces\\" + desc + "\\" + filename
+                            shutil.copy(pathname, "C:\\Faces\\Images_to_send")
                             first_file.write(filename + "\n")
-                            #count += 1
-                            #continue
+                            
                         else:
                             print("ERROR")
                             continue
                 except Exception as e:
                     print(e)
                     print("Stationary device - ignoring")
-        #first_file.write(str(count))
         first_file.close()
         #alphabetize the file of names
         alphalist = []
@@ -95,26 +90,23 @@ def capture():
             for alpha in alphalist:
                 fout.write(alpha)
         fout.close()
-        #sorted(first_file.readlines())
-        #first_file.close()
-        print("face text file sorted")
+        #print("face text file sorted")
         
         if previous_list == current_list: 
             print ("The lists are identical..no need to refresh camera") 
         else : 
             print ("The lists are not identical..refreshing camera with new photos")
+            # call to TCP server function to send photos
             host='10.132.78.207'
             server_send(host)
             #removing all images from image to send
             directory = "c:\\Faces\\Images_to_send"
-            #coming from os.listdir() sorted alphabetically
             for filename in os.listdir(directory):
-                if filename.endswith(".jpg"):
+                if filename.endswith(".pgm"):
                     os.remove(directory + "\\" + filename)
-                    #print("remove SUCCESS")
                     continue
                 else:
-                    print("ERROR2")
+                    print("no more files in directory to delete")
                     continue
         previous_list = current_list
         current_list.clear()
@@ -123,84 +115,71 @@ def capture():
     
 
 def timed_prog():
-    threading.Timer(60.0, timed_prog).start() # called every 15 seconds
+    threading.Timer(30.0, timed_prog).start() # run program every 30 seconds
     capture()
     print("----------------------")
     
 
-def server_send(host_ip): 
+def server_send(host_ip): #TCP Server function
     host= host_ip
     print(host)
     port=8005
     
-    #here sending a text file containing count and pic names
+    #here sending a text file containing picture names
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        #print("here1.2")
         s.connect((host, port))
-        
         textfile = "C:\\Faces\\Images_to_send\\face_txt.txt"
         f = open(textfile, "rb")
-        #print("here2")
         while True:
             veri = f.read(512)
-            #print("herefirst")
             if not veri:
-                print("errhere1")
+                print("finished sending file - no more bytes to send")
                 break
             s.send(veri)
-            print("text sent sent")
         f.close()
         s.close()
-        print("file and socket closed for text")
+        print("text file sent")
     
     except Exception as e:
         print(e)
-        print("error3 collecting files")
+        print("Error3 - error with sending text file")
     
     # here sending multiple images
     directory="C:\Faces\Images_to_send"
     try:
         for filename in sorted(os.listdir(directory)):
-            if filename.endswith(".jpg"):
-                print("here1")
+            if filename.endswith(".pgm"):
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                print("here1.2")
                 port += 1
                 print(port)
                 s.connect((host, port))
                 print(filename)
                 filer = "C:\\Faces\\Images_to_send\\" + filename
                 f = open(filer, "rb")
-                print("here2")
                 while True:
     
-                    veri = f.read(2000)
-                    print("herefirst")
+                    veri = f.read(512)
+                    print(len(veri))
                     if not veri:
-                        print("errhere1")
+                        print("finished sending image - no more bytes to send")
                         break
                     s.send(veri)
-                    print("512 bytes sent")
                 f.close()
                 s.close()
-                time.sleep(.1)
-                print("picture sent")
-                print("Success")
-                print("here3")
+                time.sleep(3)
                 continue
             else:
-                print("Error")
+                print("Error 4 - error collecting image")
                 continue
     except Exception as e:
         print(e)
-        print("error collecting files")
-    #s.close()
+        print("Error 5 - error sending image")
 
 
     
     
 timed_prog()
 
-# add a refresh function to send updated names to camera
+
 # need to handle exceptions for when a device does not have a photo in faces folder
