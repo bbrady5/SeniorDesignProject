@@ -1,15 +1,13 @@
 # SeniorDesignProject
 
 Main files: 
-test.py - file for Meraki AP on local computer
-test_1.py - file for OpenMV Cam
 
-other files are useful example files from OpenMV IDE 
+In order of demo:
+test.py - computer code with API call and client code
 
-THINGS TO WORK ON:
+server_test.py - server camera code to receive photos
+test_face_rec.py - camera snapshot on face detection and face detection code
 
-- How to loop through photo files if we are naming them with each persons name because a " for a = 1 to 10, photo[a]" won't work
+App code:
+text to speech xcode proj
 
-- start coding the text to speech app
-
-- how to send the images over TCP client/server
