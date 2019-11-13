@@ -1,24 +1,15 @@
-# Untitled - By: Brady - Mon Nov 4 2019
+# Untitled - By: Brady - Thu Nov 7 2019
 
 import sensor, image, time, network, usocket, sys, uos, pyb
 
 
-# AP info
-#SSID='VUPlay' # Network SSID
-#KEY='vuplay123'  # Network key
-#SSID='Villanova Senior Design - wirele' # Network SSID
-#KEY='merakipassword'  # Network key
-SSID='BallyBray' # Network SSID
-KEY='internetsafety2'  # Network key
-
-
-def face_recog(calc_time):
+def face_recog(calc_time, vi_ip):
     pin = pyb.millis()
     print(pin)
     print(calc_time)
     cc = 0
-    #print(pyb.elapsed_millis(pin))
-    while (pyb.elapsed_millis(pin)) < calc_time:
+    #pyb.elapsed_millis(start)
+    while pyb.elapsed_millis(pin) < calc_time:
         print("top of face recog function")
         #snapshot on face detection
         RED_LED_PIN = 1
@@ -38,8 +29,6 @@ def face_recog(calc_time):
         print("Now detecting faces!")
         pyb.LED(BLUE_LED_PIN).on()
         diff = 10 # We'll say we detected a face after 10 frames.
-        #if (pyb.elapsed_millis(pin)) > calc_time:
-            #continue
         try:
             while(diff):
                     img = sensor.snapshot()
@@ -50,9 +39,8 @@ def face_recog(calc_time):
                             img.draw_rectangle(r)
                     elif (pyb.elapsed_millis(pin)) > calc_time:
                         raise Exception
-        except Exception as e:
-            print("Get Out Exception called")
-
+        except Exception as go:
+            print("we are in exception")
         pyb.LED(BLUE_LED_PIN).off()
         print("Face detected! Saving image...")
         pic_name = "snapshot-person.pgm"
@@ -71,7 +59,6 @@ def face_recog(calc_time):
                     img = image.Image(filename, copy_to_fb=True).mask_ellipse()
                     d1 = img.find_lbp((0, 0, img.width(), img.height()))
                     dist = image.match_descriptor(d0, d1,50)
-                    #print("weve matched")
                     word = filename
                     #print(filename)
                     und_loc = word.index('_')
@@ -83,7 +70,7 @@ def face_recog(calc_time):
                     print(e)
                     print("error reading file")
             else:
-                print("ERROR")
+                print("file found that is not of type pgm")
         print(name_lbp_list)
         #print(len(name_lbp_list))
         end = 0
@@ -136,9 +123,36 @@ def face_recog(calc_time):
         #delete snapshot of person
         uos.remove("/snapshot-person.pgm")
         pyb.LED(2).off()
+        cc += 1
+        print(cc)
+        #client socket
+        chost = vi_ip
+        print(chost)
+        #chost = "10.132.30.198"
+        cport = 8080
+        client = usocket.socket(usocket.AF_INET, usocket.SOCK_STREAM)
+        client.connect((chost,cport))
+        to_send = id_name + "\n"
+        # Send HTTP request and recv response
+        client.send(to_send.encode())
+        # Close socket
+        client.close()
 
 
 
+
+
+# AP info
+#SSID='VUPlay' # Network SSID
+#KEY='vuplay123'  # Network key
+SSID='Villanova Senior Design - wirele' # Network SSID
+KEY='merakipassword'  # Network key
+
+HOST=''
+PORT=8005
+
+#assumption time
+#time = 90000 -- 1.5---3.5 minutes in millis
 while(True):
     # Init wlan module and connect to network
     print("Trying to connect... (may take a while)...")
@@ -154,6 +168,127 @@ while(True):
         break
 
 while(True):
-    print("top of while loop")
-    face_recog(120000)
-    print("bottom of while loop")
+
+    begin_time = pyb.millis()
+    pyb.LED(2).on()
+    uos.chdir("/")
+    #get general text file
+    s = usocket.socket(usocket.AF_INET, usocket.SOCK_STREAM)
+    s.bind((HOST, PORT))
+    s.listen(40)
+    # receive text file
+    conn, address = s.accept()
+    print(conn)
+    print(address)
+    filename= "general_txt.txt"
+    f = open(filename, "wb") # renamed file
+    print("opened file")
+    conn.send("camera ready to start receiving data...")
+    while True:
+        try:
+            veri = conn.recv(512)
+            f.write(veri)
+        except Exception as e:
+            print(e)
+            print("no more bytes - finished receiving text file")
+            break
+
+    #conn.send("camera done receiving data...")
+    f.close()
+    conn.close()
+    s.close()
+    print("connection closed - text file closed")
+
+    #determine if new faces or not
+
+
+
+    #read file and separate into list
+    f = open(filename, "r") #rb
+    lines = f.read().splitlines()
+    n=len(lines)
+    print("lines = "+ str(n))
+    print(lines)
+    f.close()
+    nochange = []
+    nochange.append('no change')
+    if nochange == lines: #THIS NEEDS TO BE FIXED TO HANDLE VI IP CASE!
+        end_time1 = pyb.elapsed_millis(begin_time)
+        #4.5 minutes = 270000 millis
+        send_time1 = 270000 - end_time1
+        face_recog(send_time1) #, LINES[0]
+    else:
+
+        #delete any old photos in this directory
+        uos.chdir("/Faces")
+        directory = "/Faces"
+        for filename in uos.listdir(directory):
+            if filename.endswith(".pgm"):
+                uos.remove(directory + "/" + filename)
+                continue
+            else:
+                print("no more files in directory to delete")
+                continue
+
+        print("deleted old photos")
+        uos.chdir("/")
+        #copy face names to new file
+        with open('faces_txt.txt', 'w') as filehandle:
+            for listitem in lines:
+                filehandle.write('%s\n' % listitem)
+            filehandle.close()
+        '''
+        filename= "faces_txt.txt"
+        f = open(filename, "wb") # renamed file
+        print("opened file")
+        f.write(lines)#change
+        f.close()
+        '''
+
+        # receive images
+        i=1
+        m=1
+        uos.chdir("/Faces")
+        #receive loop
+        while m<n: #loop for number of images to be received
+            try:
+                s = usocket.socket(usocket.AF_INET, usocket.SOCK_STREAM)
+                PORT +=1
+                print(PORT)
+                s.bind((HOST, PORT))
+                s.listen(40)
+                conn, address = s.accept()
+                print(address)
+            except Exception as e:
+                print(e)
+            filepicname= lines[m]
+            print(filepicname)
+            f = open(filepicname, "wb") # renamed file
+            print("opened file")
+            #conn.send("camera ready to start receiving data...")
+            s.settimeout(2.0)
+            while True:
+                try:
+                    veri = conn.recv(512)
+                    #print(len(veri))
+                    f.write(veri)
+                except Exception as e:
+                    print(e)
+                    print("no more bytes - received full image")
+                    break
+
+            f.close()
+            print("picture written to file and closed.")
+            i+=1
+            m+=1
+            conn.close()
+            print("connection closed")
+            s.close()
+            print("socket closed")
+        pyb.LED(2).off()
+        #st_time = (m + 20)*1000
+        end_time2 = pyb.elapsed_millis(begin_time)
+        #4.5 minutes = 270000 millis
+        send_time2 = 270000 - end_time2
+        face_recog(send_time2, lines[0])
+
