@@ -15,11 +15,8 @@ import time
 
 
 
-
-
 previous_list = []
 current_list = []
-
 
 def capture():
     global previous_list
@@ -29,7 +26,7 @@ def capture():
     print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     
     # Camera WiFi MAC address =  f8:f0:05:a1:b9:df
-    #figuring out which device the Cam was connected to
+    # to figure out which Meraki device the camera is connected to:
     url = "https://api.meraki.com/api/v0/networks/L_634444597505819269/clients/f8:f0:05:a1:b9:df"
     
     headers = {
@@ -49,13 +46,10 @@ def capture():
     print(response.text)
     json_data0 = json.loads(response.text)
     recentDeviceMac = json_data0["recentDeviceMac"]
-    print(recentDeviceMac)
-    #for item in json_data0: isolating name from other device info
-        #recentDeviceMac = item.get("recentDeviceMac")  
-        
+    print(recentDeviceMac)   
         
     
-    #find device serial number for device matching found MAC address
+    #for the Meraki device which the camera is connected to, find that device's serial number
     url = "https://api.meraki.com/api/v0/networks/L_634444597505819269/devices"
     
     headers = {
@@ -68,15 +62,16 @@ def capture():
     
     print(response.text)
     json_data1 = json.loads(response.text)
-    for item in json_data1: #isolating name from other device info
+    for item in json_data1: 
         mac = item.get("mac")
         if mac == recentDeviceMac :
             serial = item.get("serial")
             print(serial)
-    #list clients connected to device with matching serial number
-    url = "https://api.meraki.com/api/v0/devices/" + serial + "/clients" #Q2PD-6WK9-V4XS
     
-    querystring = {"timespan":"180"} # change time to 15
+    #list all clients connected to device with matching serial number
+    url = "https://api.meraki.com/api/v0/devices/" + serial + "/clients" #Q2PD-6WK9-V4XS for MR33, Q2XD-4RAF-S592 for MR20
+    
+    querystring = {"timespan":"300"} # check what clients were connected to the Meraki in the past (timespan) seconds - set to past 5 minutes (300 seconds)
     
     headers = {
         'X-Cisco-Meraki-API-Key': "b70ca858020930863c1542f511ec4267ab077aa6",
@@ -94,45 +89,45 @@ def capture():
     
     print("JSON Results:")
     print(response.text)
-    
     json_data = json.loads(response.text)
-    if len(json_data) != 0: # if the JSON is not empty
-        #open a text file to write the names of people connected to AP
+    
+    if len(json_data) != 0: # if the JSON is not empty:
+        #open a text file to write the names of people (clients) connected to AP
         first_file_path = "C:\\Faces\\Images_to_send\\face_txt.txt"
         first_file = open(first_file_path, "w")
         #empty the file of any previous contents
         first_file.seek(0)
         first_file.truncate()
         print("Client Names found:")
-        for item in json_data: #isolating name from other device info
+        for item in json_data: #isolating name (description) from other client info
             desc = item.get("description")
             directory = "c:\\Faces\\" + desc
-            #print(directory)
-            if desc == "WINC-b9-df":
+            if desc == "WINC-b9-df": # if client is the camera, get its IP address
                 host = item.get("ip")
                 print("camera ip address: " + host)
                 continue
-            elif desc == "V_I_User":
+            elif desc == "V_I_User": # if client is the visually impaired user's smartphone, get its IP address
+                vi_ip = item.get("ip")
+                print("visually impaired user's device ip address: " + vi_ip)
                 continue
-            else:
+            else: #otherwise add the names of the clients to the current list of connected clients
                 print(desc)
                 current_list.append(desc)
-                # moving selected images to a different folder to be sent to camera
+                #moving selected images to a different folder to be sent to camera
                 try:
                     for filename in sorted(os.listdir(directory)):
                         if filename.endswith(".pgm"):
                             pathname = "C:\\Faces\\" + desc + "\\" + filename
                             shutil.copy(pathname, "C:\\Faces\\Images_to_send")
                             first_file.write(filename + "\n")
-                            
                         else:
-                            print("ERROR")
+                            print("file found that is not of type pgm")
                             continue
-                except Exception as e:
+                except Exception as e: #if there is not a corresponding folder in Faces, then we assume the client is not a coworker's smartphone - ignoring
                     print(e)
                     print("Stationary device - ignoring")
         first_file.close()
-        #alphabetize the file of names
+        #alphabetize the text file of names
         alphalist = []
         first_file_path = "C:\\Faces\\Images_to_send\\face_txt.txt"
         with open(first_file_path) as first:
@@ -141,21 +136,23 @@ def capture():
         first.close()
         alphalist.sort()
         with open(first_file_path, 'w') as fout:
+            fout.write(vi_ip + "\n") #include the visually impaired user's smartphone's IP address as first line in text file
             for alpha in alphalist:
                 fout.write(alpha)
         fout.close()
-        #print("face text file sorted")
-        host='10.132.78.207'
+        #compare lists to see if there have been any changes since the last time the code was run
+        print("previous list:")
+        print(previous_list)
+        print("current list:")
+        print(current_list)
         if previous_list == current_list: 
-            print ("The lists are identical..no need to refresh camera") 
-            client_nochange(host)
+            print ("The lists are identical..no need to send new photos to the camera") 
+            client_nochange(host, vi_ip) #call to TCP function to tell camera no need to get new photos
         else : 
             print ("The lists are not identical..refreshing camera with new photos")
-            # call to TCP server function to send photos
-            #host='10.102.31.94'
-            #'''
-            client_send(host)
-            #removing all images from images to send
+            client_send(host) # call to TCP function to tell camera that we are sending it new photos
+            
+            #removing all old images from Images_to_send in order to start fresh next time the code is run
             directory = "c:\\Faces\\Images_to_send"
             for filename in os.listdir(directory):
                 if filename.endswith(".pgm"):
@@ -164,28 +161,24 @@ def capture():
                 else:
                     print("no more files in directory to delete")
                     continue
-            #'''
-        previous_list = current_list
-        current_list.clear()
-   
+                
+        previous_list = current_list.copy() #now make the current list the previous list for the next time the code is run      
+        current_list.clear() #clear the current list to start fresh the next time
+        
+        
     
-    
-
-def timed_prog():
-    threading.Timer(300.0, timed_prog).start() # run program every 30 seconds
-    capture()
-    print("----------------------")
-    
-
-def client_send(host_ip): #TCP Server function
-    host= host_ip
+def client_send(host_ip): #TCP Client function to send new photos
+    host = host_ip # camera's IP address
     print(host)
-    port=8005
+    port=8005 
     
-    #here sending a text file containing picture names
+    #here sending a text file containing image names
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((host, port))
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #create TCP socket with IPv4 addressing
+        s.connect((host, port)) # connect to camera's IP address at port 8005
+        print("waiting for camera...")
+        recv1 = s.recv(512) #receive a message from the camera stating that it is ready to receive data
+        print(recv1)
         textfile = "C:\\Faces\\Images_to_send\\face_txt.txt"
         f = open(textfile, "rb")
         while True:
@@ -193,7 +186,7 @@ def client_send(host_ip): #TCP Server function
             if not veri:
                 print("finished sending file - no more bytes to send")
                 break
-            s.send(veri)
+            s.send(veri) #send data 512 bytes at a time
         f.close()
         s.close()
         print("text file sent")
@@ -206,25 +199,23 @@ def client_send(host_ip): #TCP Server function
     directory="C:\Faces\Images_to_send"
     try:
         for filename in sorted(os.listdir(directory)):
-            if filename.endswith(".pgm"):
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            if filename.endswith(".pgm"): #for each image in Images_to_send:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  #create TCP socket with IPv4 addressing
                 port += 1
                 print(port)
-                s.connect((host, port))
+                s.connect((host, port)) # connect to camera's IP address at the next available sequential port number
                 print(filename)
                 filer = "C:\\Faces\\Images_to_send\\" + filename
                 f = open(filer, "rb")
                 while True:
-    
                     veri = f.read(512)
-                    #print(len(veri))
                     if not veri:
                         print("finished sending image - no more bytes to send")
                         break
-                    s.sendall(veri)
+                    s.send(veri) #send data 512 bytes at a time
                 f.close()
                 s.close()
-                time.sleep(1)
+                time.sleep(1) #wait one second to camera has time to process before receiving next picture
                 continue
             else:
                 print("Error 4 - error collecting image")
@@ -233,28 +224,31 @@ def client_send(host_ip): #TCP Server function
         print(e)
         print("Error 5 - error sending image")
 
-def client_nochange(host_ip): #TCP Server function
-    host= host_ip
+def client_nochange(host_ip, vi_ip): #TCP Client function to send new photos
+    host = host_ip # camera's IP address
     print(host)
     port=8005
     
-    #here sending a text file containing picture names
+    #here sending a string to the camera to say no change in clients have occurred 
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((host, port))
-       
-        s.send(b"no change")
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #create TCP socket with IPv4 addressing
+        s.connect((host, port)) # connect to camera's IP address at port 8005
+        recv2 = s.recv(512) #receive a message from the camera stating that it is ready to receive data
+        print(recv2)
+        nochange = "\nno change"
+        s.send((vi_ip + nochange).encode()) #send camera the visually impaired user's smartphone's IP address (in case of change), followed by 'no change'
         s.close()
-        print("text sent")
+        print("no change text sent")
     
     except Exception as e:
         print(e)
-        print("Error3 - error with sending no change file")
+        print("Error3 - error with sending no change text")
     
 
+def timed_prog():
+    threading.Timer(300.0, timed_prog).start() # run program every 300 seconds - 5 minutes
+    capture()
+    print("----------------------")
     
-    
-timed_prog()
+timed_prog() #main function call
 
-
-# need to handle exceptions for when a device does not have a photo in faces folder
